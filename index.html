@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カウンターアプリ</title>
+    <title>TODOリストアプリ</title>
     <style>
         * {
             margin: 0;
@@ -18,6 +18,7 @@
             align-items: center;
             min-height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
         }
 
         .container {
@@ -25,153 +26,548 @@
             padding: 40px;
             border-radius: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            text-align: center;
-            min-width: 300px;
+            width: 100%;
+            max-width: 700px;
         }
 
         h1 {
             color: #333;
             margin-bottom: 30px;
             font-size: 28px;
+            text-align: center;
         }
 
-        #counter {
-            font-size: 72px;
-            font-weight: bold;
-            color: #667eea;
-            margin: 20px 0;
-            transition: transform 0.2s;
-        }
-
-        #counter.pulse {
-            transform: scale(1.2);
-        }
-
-        .buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            border: none;
+        .input-section {
+            background: #f5f5f5;
+            padding: 20px;
             border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .add-btn {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
             transition: all 0.3s;
-            font-weight: bold;
         }
 
-        #increment {
-            background: #4CAF50;
-            color: white;
-        }
-
-        #increment:hover {
-            background: #45a049;
+        .add-btn:hover {
+            background: #5568d3;
             transform: translateY(-2px);
         }
 
-        #decrement {
+        .add-btn:active {
+            transform: translateY(0);
+        }
+
+        .todo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .todo-item {
+            background: #f9f9f9;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.3s;
+        }
+
+        .todo-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .todo-item.completed {
+            opacity: 0.7;
+            background: #f0f0f0;
+        }
+
+        .todo-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .todo-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .todo-title {
+            flex: 1;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .todo-item.completed .todo-title {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .todo-content {
+            margin-left: 30px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .todo-item.completed .todo-content {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .todo-actions {
+            display: flex;
+            gap: 10px;
+            margin-left: 30px;
+        }
+
+        .delete-btn {
+            padding: 8px 16px;
             background: #f44336;
             color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
         }
 
-        #decrement:hover {
+        .delete-btn:hover {
             background: #da190b;
-            transform: translateY(-2px);
         }
 
-        #reset {
-            background: #ff9800;
-            color: white;
+        .todo-date {
+            margin-left: 30px;
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
         }
 
-        #reset:hover {
-            background: #e68900;
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
+        .empty-message {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎯 カウンターアプリ</h1>
-        <div id="counter">0</div>
-        <div class="buttons">
-            <button id="decrement">➖ 減らす</button>
-            <button id="reset">🔄 リセット</button>
-            <button id="increment">➕ 増やす</button>
+        <h1>📝 TODOリストアプリ</h1>
+
+        <div class="input-section">
+            <div class="input-group">
+                <label for="todo-title">題名</label>
+                <input type="text" id="todo-title" placeholder="TODOの題名を入力...">
+            </div>
+            <div class="input-group">
+                <label for="todo-content">内容</label>
+                <textarea id="todo-content" placeholder="TODOの内容を入力..."></textarea>
+            </div>
+            <button class="add-btn" id="add-todo-btn">➕ TODOを追加</button>
+        </div>
+
+        <div id="todo-list" class="todo-list">
+            <div class="empty-message">TODOがありません。上のフォームから追加してください。</div>
         </div>
     </div>
 
     <script>
-        // 変数の初期化
-        let count = 0;
-        
-        // 要素の取得
-        const counterDisplay = document.getElementById('counter');
-        const incrementBtn = document.getElementById('increment');
-        const decrementBtn = document.getElementById('decrement');
-        const resetBtn = document.getElementById('reset');
+        // IndexedDB管理クラス（TODO用）
+        class TodoDB {
+            constructor(dbName = 'TodoDB', storeName = 'todos', version = 1) {
+                this.dbName = dbName;
+                this.storeName = storeName;
+                this.version = version;
+                this.db = null;
+            }
 
-        // アニメーション効果を追加する関数
-        function addPulseEffect() {
-            counterDisplay.classList.add('pulse');
-            setTimeout(() => {
-                counterDisplay.classList.remove('pulse');
-            }, 200);
+            // データベースを初期化
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+
+                    request.onerror = () => {
+                        console.error('IndexedDB のオープンに失敗しました');
+                        reject(request.error);
+                    };
+
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        console.log('IndexedDB が正常に開かれました');
+                        resolve(this.db);
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        this.db = event.target.result;
+
+                        // オブジェクトストアが存在しない場合は作成
+                        if (!this.db.objectStoreNames.contains(this.storeName)) {
+                            const objectStore = this.db.createObjectStore(this.storeName, {
+                                keyPath: 'id',
+                                autoIncrement: true
+                            });
+                            // インデックスを作成（日付でソート可能にする）
+                            objectStore.createIndex('createdAt', 'createdAt', { unique: false });
+                            console.log(`オブジェクトストア "${this.storeName}" を作成しました`);
+                        }
+                    };
+                });
+            }
+
+            // TODOを追加
+            async addTodo(title, content) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const todo = {
+                        title: title,
+                        content: content,
+                        completed: false,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.add(todo);
+
+                    request.onsuccess = () => {
+                        todo.id = request.result;
+                        console.log('TODOを追加しました:', todo);
+                        resolve(todo);
+                    };
+
+                    request.onerror = () => {
+                        console.error('TODOの追加に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // すべてのTODOを取得
+            async getAllTodos() {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.getAll();
+
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+
+                    request.onerror = () => {
+                        console.error('TODOの取得に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // TODOを更新
+            async updateTodo(id, data) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const getRequest = objectStore.get(id);
+
+                    getRequest.onsuccess = () => {
+                        const todo = getRequest.result;
+                        if (!todo) {
+                            reject(new Error('TODOが見つかりません'));
+                            return;
+                        }
+
+                        // データを更新
+                        Object.assign(todo, data);
+
+                        const updateRequest = objectStore.put(todo);
+
+                        updateRequest.onsuccess = () => {
+                            console.log('TODOを更新しました:', todo);
+                            resolve(todo);
+                        };
+
+                        updateRequest.onerror = () => {
+                            console.error('TODOの更新に失敗しました');
+                            reject(updateRequest.error);
+                        };
+                    };
+
+                    getRequest.onerror = () => {
+                        reject(getRequest.error);
+                    };
+                });
+            }
+
+            // TODOを削除
+            async deleteTodo(id) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.delete(id);
+
+                    request.onsuccess = () => {
+                        console.log('TODOを削除しました:', id);
+                        resolve();
+                    };
+
+                    request.onerror = () => {
+                        console.error('TODOの削除に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // 完了状態を切り替え
+            async toggleComplete(id) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const getRequest = objectStore.get(id);
+
+                    getRequest.onsuccess = () => {
+                        const todo = getRequest.result;
+                        if (!todo) {
+                            reject(new Error('TODOが見つかりません'));
+                            return;
+                        }
+
+                        todo.completed = !todo.completed;
+
+                        const updateRequest = objectStore.put(todo);
+
+                        updateRequest.onsuccess = () => {
+                            console.log('完了状態を切り替えました:', todo);
+                            resolve(todo);
+                        };
+
+                        updateRequest.onerror = () => {
+                            reject(updateRequest.error);
+                        };
+                    };
+
+                    getRequest.onerror = () => {
+                        reject(getRequest.error);
+                    };
+                });
+            }
+
+            // データベースを閉じる
+            close() {
+                if (this.db) {
+                    this.db.close();
+                    console.log('IndexedDB を閉じました');
+                }
+            }
         }
 
-        // カウンターを更新する関数
-        function updateCounter() {
-            counterDisplay.textContent = count;
-            addPulseEffect();
-            
-            // カウントに応じて色を変更
-            if (count > 0) {
-                counterDisplay.style.color = '#4CAF50';
-            } else if (count < 0) {
-                counterDisplay.style.color = '#f44336';
-            } else {
-                counterDisplay.style.color = '#667eea';
+        // 変数とインスタンスの初期化
+        const todoDB = new TodoDB();
+
+        // 要素の取得
+        const todoTitleInput = document.getElementById('todo-title');
+        const todoContentInput = document.getElementById('todo-content');
+        const addTodoBtn = document.getElementById('add-todo-btn');
+        const todoList = document.getElementById('todo-list');
+
+        // 日付をフォーマット
+        function formatDate(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // TODOリストを表示
+        async function renderTodos() {
+            try {
+                const todos = await todoDB.getAllTodos();
+
+                if (todos.length === 0) {
+                    todoList.innerHTML = '<div class="empty-message">TODOがありません。上のフォームから追加してください。</div>';
+                    return;
+                }
+
+                // 作成日時の新しい順にソート
+                todos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+                todoList.innerHTML = todos.map(todo => `
+                    <div class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
+                        <div class="todo-header">
+                            <input type="checkbox" class="todo-checkbox"
+                                   ${todo.completed ? 'checked' : ''}
+                                   onchange="toggleTodoComplete(${todo.id})">
+                            <div class="todo-title">${escapeHtml(todo.title)}</div>
+                        </div>
+                        <div class="todo-content">${escapeHtml(todo.content)}</div>
+                        <div class="todo-date">${formatDate(todo.createdAt)}</div>
+                        <div class="todo-actions">
+                            <button class="delete-btn" onclick="deleteTodoItem(${todo.id})">🗑️ 削除</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('TODO表示エラー:', error);
+            }
+        }
+
+        // HTMLエスケープ
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // TODOを追加
+        async function addTodo() {
+            const title = todoTitleInput.value.trim();
+            const content = todoContentInput.value.trim();
+
+            if (!title) {
+                alert('題名を入力してください');
+                return;
+            }
+
+            try {
+                await todoDB.addTodo(title, content);
+
+                // 入力フィールドをクリア
+                todoTitleInput.value = '';
+                todoContentInput.value = '';
+
+                // リストを再描画
+                await renderTodos();
+            } catch (error) {
+                console.error('TODO追加エラー:', error);
+                alert('TODOの追加に失敗しました');
+            }
+        }
+
+        // 完了状態を切り替え
+        async function toggleTodoComplete(id) {
+            try {
+                await todoDB.toggleComplete(id);
+                await renderTodos();
+            } catch (error) {
+                console.error('完了状態切り替えエラー:', error);
+            }
+        }
+
+        // TODOを削除
+        async function deleteTodoItem(id) {
+            if (!confirm('このTODOを削除しますか？')) {
+                return;
+            }
+
+            try {
+                await todoDB.deleteTodo(id);
+                await renderTodos();
+            } catch (error) {
+                console.error('TODO削除エラー:', error);
+                alert('TODOの削除に失敗しました');
+            }
+        }
+
+        // アプリケーションの初期化
+        async function initApp() {
+            try {
+                await todoDB.init();
+                await renderTodos();
+                console.log('TODOアプリを初期化しました');
+            } catch (error) {
+                console.error('初期化エラー:', error);
             }
         }
 
         // イベントリスナーの設定
-        incrementBtn.addEventListener('click', () => {
-            count++;
-            updateCounter();
-        });
+        addTodoBtn.addEventListener('click', addTodo);
 
-        decrementBtn.addEventListener('click', () => {
-            count--;
-            updateCounter();
-        });
-
-        resetBtn.addEventListener('click', () => {
-            count = 0;
-            updateCounter();
-        });
-
-        // キーボードショートカット
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowUp') {
-                count++;
-                updateCounter();
-            } else if (e.key === 'ArrowDown') {
-                count--;
-                updateCounter();
-            } else if (e.key === 'r' || e.key === 'R') {
-                count = 0;
-                updateCounter();
+        // Enterキーで追加
+        todoTitleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addTodo();
             }
         });
+
+        todoContentInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                addTodo();
+            }
+        });
+
+        // アプリケーション起動
+        initApp();
     </script>
 </body>
 </html>
