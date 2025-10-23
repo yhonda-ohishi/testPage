@@ -113,12 +113,82 @@
     <script>
         // 変数の初期化
         let count = 0;
-        
+        let db;
+
         // 要素の取得
         const counterDisplay = document.getElementById('counter');
         const incrementBtn = document.getElementById('increment');
         const decrementBtn = document.getElementById('decrement');
         const resetBtn = document.getElementById('reset');
+
+        // IndexedDBの初期化
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('CounterDB', 1);
+
+                request.onerror = () => {
+                    console.error('IndexedDB のオープンに失敗しました');
+                    reject(request.error);
+                };
+
+                request.onsuccess = () => {
+                    db = request.result;
+                    console.log('IndexedDB が正常に開かれました');
+                    resolve(db);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+
+                    // オブジェクトストアが存在しない場合は作成
+                    if (!db.objectStoreNames.contains('counters')) {
+                        const objectStore = db.createObjectStore('counters', { keyPath: 'id' });
+                        console.log('オブジェクトストア "counters" を作成しました');
+                    }
+                };
+            });
+        }
+
+        // IndexedDBからカウント値を読み込む
+        function loadCountFromDB() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['counters'], 'readonly');
+                const objectStore = transaction.objectStore('counters');
+                const request = objectStore.get('mainCounter');
+
+                request.onsuccess = () => {
+                    if (request.result) {
+                        resolve(request.result.value);
+                    } else {
+                        resolve(0); // データがない場合は0を返す
+                    }
+                };
+
+                request.onerror = () => {
+                    console.error('カウント値の読み込みに失敗しました');
+                    reject(request.error);
+                };
+            });
+        }
+
+        // IndexedDBにカウント値を保存する
+        function saveCountToDB(value) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['counters'], 'readwrite');
+                const objectStore = transaction.objectStore('counters');
+                const request = objectStore.put({ id: 'mainCounter', value: value });
+
+                request.onsuccess = () => {
+                    console.log('カウント値を保存しました:', value);
+                    resolve();
+                };
+
+                request.onerror = () => {
+                    console.error('カウント値の保存に失敗しました');
+                    reject(request.error);
+                };
+            });
+        }
 
         // アニメーション効果を追加する関数
         function addPulseEffect() {
@@ -132,7 +202,7 @@
         function updateCounter() {
             counterDisplay.textContent = count;
             addPulseEffect();
-            
+
             // カウントに応じて色を変更
             if (count > 0) {
                 counterDisplay.style.color = '#4CAF50';
@@ -140,6 +210,32 @@
                 counterDisplay.style.color = '#f44336';
             } else {
                 counterDisplay.style.color = '#667eea';
+            }
+
+            // IndexedDBに保存
+            saveCountToDB(count);
+        }
+
+        // アプリケーションの初期化
+        async function initApp() {
+            try {
+                await initDB();
+                const savedCount = await loadCountFromDB();
+                count = savedCount;
+                counterDisplay.textContent = count;
+
+                // 初期表示時も色を設定
+                if (count > 0) {
+                    counterDisplay.style.color = '#4CAF50';
+                } else if (count < 0) {
+                    counterDisplay.style.color = '#f44336';
+                } else {
+                    counterDisplay.style.color = '#667eea';
+                }
+
+                console.log('アプリケーションを初期化しました。カウント値:', count);
+            } catch (error) {
+                console.error('初期化エラー:', error);
             }
         }
 
@@ -172,6 +268,9 @@
                 updateCounter();
             }
         });
+
+        // アプリケーション起動
+        initApp();
     </script>
 </body>
 </html>
