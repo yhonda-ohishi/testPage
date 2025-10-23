@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TODOリストアプリ</title>
+    <title>TODOリストアプリ (SQL.js)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
         * {
             margin: 0;
@@ -218,212 +219,270 @@
     </div>
 
     <script>
-        // IndexedDB管理クラス（TODO用）
+        // SQL.js管理クラス（TODO用）
         class TodoDB {
-            constructor(dbName = 'TodoDB', storeName = 'todos', version = 1) {
-                this.dbName = dbName;
-                this.storeName = storeName;
-                this.version = version;
+            constructor(storageKey = 'todoDB') {
+                this.storageKey = storageKey;
                 this.db = null;
+                this.SQL = null;
             }
 
             // データベースを初期化
             async init() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(this.dbName, this.version);
+                try {
+                    // sql.jsの初期化
+                    this.SQL = await initSqlJs({
+                        locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                    });
 
-                    request.onerror = () => {
-                        console.error('IndexedDB のオープンに失敗しました');
-                        reject(request.error);
-                    };
+                    // localStorageから既存のデータベースを読み込む
+                    const savedData = localStorage.getItem(this.storageKey);
 
-                    request.onsuccess = () => {
-                        this.db = request.result;
-                        console.log('IndexedDB が正常に開かれました');
-                        resolve(this.db);
-                    };
-
-                    request.onupgradeneeded = (event) => {
-                        this.db = event.target.result;
-
-                        // オブジェクトストアが存在しない場合は作成
-                        if (!this.db.objectStoreNames.contains(this.storeName)) {
-                            const objectStore = this.db.createObjectStore(this.storeName, {
-                                keyPath: 'id',
-                                autoIncrement: true
-                            });
-                            // インデックスを作成（日付でソート可能にする）
-                            objectStore.createIndex('createdAt', 'createdAt', { unique: false });
-                            console.log(`オブジェクトストア "${this.storeName}" を作成しました`);
+                    if (savedData) {
+                        // Base64デコードして復元
+                        const binaryString = atob(savedData);
+                        const bytes = new Uint8Array(binaryString.length);
+                        for (let i = 0; i < binaryString.length; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
                         }
-                    };
-                });
+                        this.db = new this.SQL.Database(bytes);
+                        console.log('既存のデータベースを読み込みました');
+                    } else {
+                        // 新しいデータベースを作成
+                        this.db = new this.SQL.Database();
+                        this.createTable();
+                        console.log('新しいデータベースを作成しました');
+                    }
+
+                    return this.db;
+                } catch (error) {
+                    console.error('データベースの初期化に失敗しました:', error);
+                    throw error;
+                }
+            }
+
+            // テーブルを作成
+            createTable() {
+                const sql = `
+                    CREATE TABLE IF NOT EXISTS todos (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL,
+                        content TEXT,
+                        completed INTEGER DEFAULT 0,
+                        createdAt TEXT NOT NULL
+                    );
+                `;
+                this.db.run(sql);
+                this.save();
+                console.log('todosテーブルを作成しました');
+            }
+
+            // データベースをlocalStorageに保存
+            save() {
+                try {
+                    const data = this.db.export();
+                    const binary = String.fromCharCode.apply(null, data);
+                    const base64 = btoa(binary);
+                    localStorage.setItem(this.storageKey, base64);
+                } catch (error) {
+                    console.error('データベースの保存に失敗しました:', error);
+                }
             }
 
             // TODOを追加
             async addTodo(title, content) {
-                return new Promise((resolve, reject) => {
-                    if (!this.db) {
-                        reject(new Error('データベースが初期化されていません'));
-                        return;
-                    }
+                try {
+                    const sql = `
+                        INSERT INTO todos (title, content, completed, createdAt)
+                        VALUES (?, ?, 0, ?)
+                    `;
+                    const createdAt = new Date().toISOString();
+                    this.db.run(sql, [title, content, createdAt]);
+
+                    // 最後に挿入されたIDを取得
+                    const result = this.db.exec('SELECT last_insert_rowid() as id');
+                    const id = result[0].values[0][0];
+
+                    this.save();
 
                     const todo = {
+                        id: id,
                         title: title,
                         content: content,
                         completed: false,
-                        createdAt: new Date().toISOString()
+                        createdAt: createdAt
                     };
 
-                    const transaction = this.db.transaction([this.storeName], 'readwrite');
-                    const objectStore = transaction.objectStore(this.storeName);
-                    const request = objectStore.add(todo);
-
-                    request.onsuccess = () => {
-                        todo.id = request.result;
-                        console.log('TODOを追加しました:', todo);
-                        resolve(todo);
-                    };
-
-                    request.onerror = () => {
-                        console.error('TODOの追加に失敗しました');
-                        reject(request.error);
-                    };
-                });
+                    console.log('TODOを追加しました:', todo);
+                    return todo;
+                } catch (error) {
+                    console.error('TODOの追加に失敗しました:', error);
+                    throw error;
+                }
             }
 
             // すべてのTODOを取得
             async getAllTodos() {
-                return new Promise((resolve, reject) => {
-                    if (!this.db) {
-                        reject(new Error('データベースが初期化されていません'));
-                        return;
+                try {
+                    const sql = 'SELECT * FROM todos ORDER BY createdAt DESC';
+                    const result = this.db.exec(sql);
+
+                    if (result.length === 0) {
+                        return [];
                     }
 
-                    const transaction = this.db.transaction([this.storeName], 'readonly');
-                    const objectStore = transaction.objectStore(this.storeName);
-                    const request = objectStore.getAll();
+                    const columns = result[0].columns;
+                    const values = result[0].values;
 
-                    request.onsuccess = () => {
-                        resolve(request.result);
-                    };
+                    // カラム名と値を組み合わせてオブジェクトの配列に変換
+                    const todos = values.map(row => {
+                        const todo = {};
+                        columns.forEach((col, index) => {
+                            if (col === 'completed') {
+                                todo[col] = row[index] === 1;
+                            } else {
+                                todo[col] = row[index];
+                            }
+                        });
+                        return todo;
+                    });
 
-                    request.onerror = () => {
-                        console.error('TODOの取得に失敗しました');
-                        reject(request.error);
-                    };
-                });
+                    return todos;
+                } catch (error) {
+                    console.error('TODOの取得に失敗しました:', error);
+                    return [];
+                }
             }
 
             // TODOを更新
             async updateTodo(id, data) {
-                return new Promise((resolve, reject) => {
-                    if (!this.db) {
-                        reject(new Error('データベースが初期化されていません'));
-                        return;
+                try {
+                    const updates = [];
+                    const values = [];
+
+                    if (data.title !== undefined) {
+                        updates.push('title = ?');
+                        values.push(data.title);
+                    }
+                    if (data.content !== undefined) {
+                        updates.push('content = ?');
+                        values.push(data.content);
+                    }
+                    if (data.completed !== undefined) {
+                        updates.push('completed = ?');
+                        values.push(data.completed ? 1 : 0);
                     }
 
-                    const transaction = this.db.transaction([this.storeName], 'readwrite');
-                    const objectStore = transaction.objectStore(this.storeName);
-                    const getRequest = objectStore.get(id);
+                    values.push(id);
 
-                    getRequest.onsuccess = () => {
-                        const todo = getRequest.result;
-                        if (!todo) {
-                            reject(new Error('TODOが見つかりません'));
-                            return;
-                        }
+                    const sql = `UPDATE todos SET ${updates.join(', ')} WHERE id = ?`;
+                    this.db.run(sql, values);
+                    this.save();
 
-                        // データを更新
-                        Object.assign(todo, data);
-
-                        const updateRequest = objectStore.put(todo);
-
-                        updateRequest.onsuccess = () => {
-                            console.log('TODOを更新しました:', todo);
-                            resolve(todo);
-                        };
-
-                        updateRequest.onerror = () => {
-                            console.error('TODOの更新に失敗しました');
-                            reject(updateRequest.error);
-                        };
-                    };
-
-                    getRequest.onerror = () => {
-                        reject(getRequest.error);
-                    };
-                });
+                    console.log('TODOを更新しました:', id);
+                    return data;
+                } catch (error) {
+                    console.error('TODOの更新に失敗しました:', error);
+                    throw error;
+                }
             }
 
             // TODOを削除
             async deleteTodo(id) {
-                return new Promise((resolve, reject) => {
-                    if (!this.db) {
-                        reject(new Error('データベースが初期化されていません'));
-                        return;
-                    }
-
-                    const transaction = this.db.transaction([this.storeName], 'readwrite');
-                    const objectStore = transaction.objectStore(this.storeName);
-                    const request = objectStore.delete(id);
-
-                    request.onsuccess = () => {
-                        console.log('TODOを削除しました:', id);
-                        resolve();
-                    };
-
-                    request.onerror = () => {
-                        console.error('TODOの削除に失敗しました');
-                        reject(request.error);
-                    };
-                });
+                try {
+                    const sql = 'DELETE FROM todos WHERE id = ?';
+                    this.db.run(sql, [id]);
+                    this.save();
+                    console.log('TODOを削除しました:', id);
+                } catch (error) {
+                    console.error('TODOの削除に失敗しました:', error);
+                    throw error;
+                }
             }
 
             // 完了状態を切り替え
             async toggleComplete(id) {
-                return new Promise((resolve, reject) => {
-                    if (!this.db) {
-                        reject(new Error('データベースが初期化されていません'));
-                        return;
+                try {
+                    const sql = 'UPDATE todos SET completed = NOT completed WHERE id = ?';
+                    this.db.run(sql, [id]);
+                    this.save();
+                    console.log('完了状態を切り替えました:', id);
+                } catch (error) {
+                    console.error('完了状態の切り替えに失敗しました:', error);
+                    throw error;
+                }
+            }
+
+            // 検索機能（SQL LIKE を使用）
+            async searchTodos(keyword) {
+                try {
+                    const sql = `
+                        SELECT * FROM todos
+                        WHERE title LIKE ? OR content LIKE ?
+                        ORDER BY createdAt DESC
+                    `;
+                    const pattern = `%${keyword}%`;
+                    const result = this.db.exec(sql, [pattern, pattern]);
+
+                    if (result.length === 0) {
+                        return [];
                     }
 
-                    const transaction = this.db.transaction([this.storeName], 'readwrite');
-                    const objectStore = transaction.objectStore(this.storeName);
-                    const getRequest = objectStore.get(id);
+                    const columns = result[0].columns;
+                    const values = result[0].values;
 
-                    getRequest.onsuccess = () => {
-                        const todo = getRequest.result;
-                        if (!todo) {
-                            reject(new Error('TODOが見つかりません'));
-                            return;
-                        }
+                    const todos = values.map(row => {
+                        const todo = {};
+                        columns.forEach((col, index) => {
+                            if (col === 'completed') {
+                                todo[col] = row[index] === 1;
+                            } else {
+                                todo[col] = row[index];
+                            }
+                        });
+                        return todo;
+                    });
 
-                        todo.completed = !todo.completed;
+                    return todos;
+                } catch (error) {
+                    console.error('検索に失敗しました:', error);
+                    return [];
+                }
+            }
 
-                        const updateRequest = objectStore.put(todo);
+            // 統計情報を取得（SQLの集計機能を使用）
+            async getStats() {
+                try {
+                    const sql = `
+                        SELECT
+                            COUNT(*) as total,
+                            SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed,
+                            SUM(CASE WHEN completed = 0 THEN 1 ELSE 0 END) as pending
+                        FROM todos
+                    `;
+                    const result = this.db.exec(sql);
 
-                        updateRequest.onsuccess = () => {
-                            console.log('完了状態を切り替えました:', todo);
-                            resolve(todo);
-                        };
+                    if (result.length === 0) {
+                        return { total: 0, completed: 0, pending: 0 };
+                    }
 
-                        updateRequest.onerror = () => {
-                            reject(updateRequest.error);
-                        };
+                    const values = result[0].values[0];
+                    return {
+                        total: values[0],
+                        completed: values[1],
+                        pending: values[2]
                     };
-
-                    getRequest.onerror = () => {
-                        reject(getRequest.error);
-                    };
-                });
+                } catch (error) {
+                    console.error('統計情報の取得に失敗しました:', error);
+                    return { total: 0, completed: 0, pending: 0 };
+                }
             }
 
             // データベースを閉じる
             close() {
                 if (this.db) {
                     this.db.close();
-                    console.log('IndexedDB を閉じました');
+                    console.log('データベースを閉じました');
                 }
             }
         }
