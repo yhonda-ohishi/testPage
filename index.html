@@ -111,84 +111,159 @@
     </div>
 
     <script>
+        // IndexedDB管理クラス
+        class CounterDB {
+            constructor(dbName = 'CounterDB', storeName = 'counters', version = 1) {
+                this.dbName = dbName;
+                this.storeName = storeName;
+                this.version = version;
+                this.db = null;
+            }
+
+            // データベースを初期化
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+
+                    request.onerror = () => {
+                        console.error('IndexedDB のオープンに失敗しました');
+                        reject(request.error);
+                    };
+
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        console.log('IndexedDB が正常に開かれました');
+                        resolve(this.db);
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        this.db = event.target.result;
+
+                        // オブジェクトストアが存在しない場合は作成
+                        if (!this.db.objectStoreNames.contains(this.storeName)) {
+                            const objectStore = this.db.createObjectStore(this.storeName, { keyPath: 'id' });
+                            console.log(`オブジェクトストア "${this.storeName}" を作成しました`);
+                        }
+                    };
+                });
+            }
+
+            // 値を読み込む
+            async load(key, defaultValue = 0) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.get(key);
+
+                    request.onsuccess = () => {
+                        if (request.result) {
+                            resolve(request.result.value);
+                        } else {
+                            resolve(defaultValue);
+                        }
+                    };
+
+                    request.onerror = () => {
+                        console.error('データの読み込みに失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // 値を保存する
+            async save(key, value) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.put({ id: key, value: value });
+
+                    request.onsuccess = () => {
+                        console.log('データを保存しました:', { key, value });
+                        resolve();
+                    };
+
+                    request.onerror = () => {
+                        console.error('データの保存に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // 値を削除する
+            async delete(key) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.delete(key);
+
+                    request.onsuccess = () => {
+                        console.log('データを削除しました:', key);
+                        resolve();
+                    };
+
+                    request.onerror = () => {
+                        console.error('データの削除に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // すべてのデータを取得
+            async getAll() {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) {
+                        reject(new Error('データベースが初期化されていません'));
+                        return;
+                    }
+
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const objectStore = transaction.objectStore(this.storeName);
+                    const request = objectStore.getAll();
+
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+
+                    request.onerror = () => {
+                        console.error('すべてのデータの取得に失敗しました');
+                        reject(request.error);
+                    };
+                });
+            }
+
+            // データベースを閉じる
+            close() {
+                if (this.db) {
+                    this.db.close();
+                    console.log('IndexedDB を閉じました');
+                }
+            }
+        }
+
         // 変数の初期化
         let count = 0;
-        let db;
+        const counterDB = new CounterDB();
 
         // 要素の取得
         const counterDisplay = document.getElementById('counter');
         const incrementBtn = document.getElementById('increment');
         const decrementBtn = document.getElementById('decrement');
         const resetBtn = document.getElementById('reset');
-
-        // IndexedDBの初期化
-        function initDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open('CounterDB', 1);
-
-                request.onerror = () => {
-                    console.error('IndexedDB のオープンに失敗しました');
-                    reject(request.error);
-                };
-
-                request.onsuccess = () => {
-                    db = request.result;
-                    console.log('IndexedDB が正常に開かれました');
-                    resolve(db);
-                };
-
-                request.onupgradeneeded = (event) => {
-                    db = event.target.result;
-
-                    // オブジェクトストアが存在しない場合は作成
-                    if (!db.objectStoreNames.contains('counters')) {
-                        const objectStore = db.createObjectStore('counters', { keyPath: 'id' });
-                        console.log('オブジェクトストア "counters" を作成しました');
-                    }
-                };
-            });
-        }
-
-        // IndexedDBからカウント値を読み込む
-        function loadCountFromDB() {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['counters'], 'readonly');
-                const objectStore = transaction.objectStore('counters');
-                const request = objectStore.get('mainCounter');
-
-                request.onsuccess = () => {
-                    if (request.result) {
-                        resolve(request.result.value);
-                    } else {
-                        resolve(0); // データがない場合は0を返す
-                    }
-                };
-
-                request.onerror = () => {
-                    console.error('カウント値の読み込みに失敗しました');
-                    reject(request.error);
-                };
-            });
-        }
-
-        // IndexedDBにカウント値を保存する
-        function saveCountToDB(value) {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['counters'], 'readwrite');
-                const objectStore = transaction.objectStore('counters');
-                const request = objectStore.put({ id: 'mainCounter', value: value });
-
-                request.onsuccess = () => {
-                    console.log('カウント値を保存しました:', value);
-                    resolve();
-                };
-
-                request.onerror = () => {
-                    console.error('カウント値の保存に失敗しました');
-                    reject(request.error);
-                };
-            });
-        }
 
         // アニメーション効果を追加する関数
         function addPulseEffect() {
@@ -199,7 +274,7 @@
         }
 
         // カウンターを更新する関数
-        function updateCounter() {
+        async function updateCounter() {
             counterDisplay.textContent = count;
             addPulseEffect();
 
@@ -213,14 +288,21 @@
             }
 
             // IndexedDBに保存
-            saveCountToDB(count);
+            try {
+                await counterDB.save('mainCounter', count);
+            } catch (error) {
+                console.error('保存エラー:', error);
+            }
         }
 
         // アプリケーションの初期化
         async function initApp() {
             try {
-                await initDB();
-                const savedCount = await loadCountFromDB();
+                // IndexedDBを初期化
+                await counterDB.init();
+
+                // 保存されたカウント値を読み込む
+                const savedCount = await counterDB.load('mainCounter', 0);
                 count = savedCount;
                 counterDisplay.textContent = count;
 
